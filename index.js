@@ -31,8 +31,6 @@ var end = function(ws, fn) {
   fn()
 }
 
-var noop = function() {}
-
 var toStreams2 = function(rs) {
   return new (stream.Readable)({objectMode:true, highWaterMark:16}).wrap(rs)
 }
@@ -175,15 +173,13 @@ Duplexify.prototype._forward = function() {
   this._forwarding = false
 }
 
-Duplexify.prototype.destroy = function(err, cb) {
-  if (!cb) cb = noop
-  if (this.destroyed) return cb(null)
+Duplexify.prototype.destroy = function(err) {
+  if (this.destroyed) return
   this.destroyed = true
 
   var self = this
   process.nextTick(function() {
     self._destroy(err)
-    cb(null)
   })
 }
 
@@ -196,30 +192,30 @@ Duplexify.prototype._destroy = function(err) {
   }
 
   if (this._forwardDestroy) {
-    if (this._readable && this._readable.destroy) this._readable.destroy()
-    if (this._writable && this._writable.destroy) this._writable.destroy()
+    if (this._readable && this._readable?.destroy) this._readable.destroy()
+    if (this._writable && this._writable?.destroy) this._writable.destroy()
   }
 
   this.emit('close')
 }
 
 Duplexify.prototype._write = function(data, enc, cb) {
-  if (this.destroyed) return
+  if (this.destroyed) return cb()
   if (this._corked) return onuncork(this, this._write.bind(this, data, enc, cb))
   if (data === SIGNAL_FLUSH) return this._finish(cb)
   if (!this._writable) return cb()
 
   if (this._writable.write(data) === false) this._ondrain = cb
-  else if (!this.destroyed) cb()
+  else cb()
 }
 
 Duplexify.prototype._finish = function(cb) {
   var self = this
   this.emit('preend')
   onuncork(this, function() {
-    end(self._forwardEnd && self._writable, function() {
+    end(self?._forwardEnd && self?._writable, function() {
       // haxx to not emit prefinish twice
-      if (self._writableState.prefinished === false) self._writableState.prefinished = true
+      if (self?._writableState.prefinished === false) self._writableState.prefinished = true
       self.emit('prefinish')
       onuncork(self, cb)
     })
@@ -231,8 +227,8 @@ Duplexify.prototype.end = function(data, enc, cb) {
   if (typeof enc === 'function') return this.end(data, null, enc)
   this._ended = true
   if (data) this.write(data)
-  if (!this._writableState.ending && !this._writableState.destroyed) this.write(SIGNAL_FLUSH)
-  return stream.Writable.prototype.end.call(this, cb)
+  if (!this._writableState?.ending) this.write(SIGNAL_FLUSH)
+  return stream.Writable.prototype?.end?.call(this, cb)
 }
 
 module.exports = Duplexify
